@@ -17,6 +17,7 @@
 #include <linux/uaccess.h>
 #include <linux/namei.h>
 #include <linux/workqueue.h>
+#include <linux/mutex.h>
 #include <linux/uio.h>
 #include <linux/stat.h>
 
@@ -29,6 +30,7 @@
 #include "selinux/selinux.h"
 #include "hook/syscall_hook.h"
 #include "hook/syscall_event_bridge.h"
+#include "manager/throne_tracker.h"
 
 // clang-format off
 static const char KERNEL_SU_RC[] =
@@ -147,14 +149,16 @@ fail:
     return false;
 }
 
+// Graphite: file scope, so the late fallback below can tell what the exec hooks saw
+static bool init_second_stage_executed = false;
+static bool first_zygote = true;
+
 void ksu_handle_execveat_ksud(const char *path, struct user_arg_ptr *argv)
 {
     static const char app_process[] = "/system/bin/app_process";
-    static bool first_zygote = true;
 
     /* This applies to versions Android 10+ */
     static const char system_bin_init[] = "/system/bin/init";
-    static bool init_second_stage_executed = false;
 
     // https://cs.android.com/android/platform/superproject/+/android-16.0.0_r2:system/core/init/main.cpp;l=77
     if (unlikely(!memcmp(path, system_bin_init, sizeof(system_bin_init) - 1) && argv)) {
@@ -673,4 +677,45 @@ void __exit ksu_ksud_exit()
     if (module_rc_buf) {
         free_module_rc();
     }
+}
+
+/*
+ * Graphite: on GrapheneOS's kernel the exec hooks often can't read the new program's arguments
+ * (strncpy_from_user_nofault fails for pages that aren't loaded yet), so second stage init and the
+ * first zygote can go unnoticed. Then KernelSU's SELinux rules aren't applied, its package watcher
+ * never starts, and the manager is never found. When the first app process starts, catch up on
+ * whatever was missed, as the late-load mode does at runtime, and scan for the manager.
+ */
+void ksu_graphite_boot_fallback(void)
+{
+    static DEFINE_MUTEX(lock);
+    static bool done = false;
+
+    if (ksu_late_loaded)
+        return;
+    // Concurrent app starts wait, so none of them runs before the manager is found
+    mutex_lock(&lock);
+    if (done) {
+        mutex_unlock(&lock);
+        return;
+    }
+    done = true;
+
+    if (!init_second_stage_executed) {
+        pr_info("graphite: second_stage wasn't seen, applying rules now\n");
+        ksu_selinux_hide_handle_second_stage();
+        apply_kernelsu_rules();
+        cache_sid();
+        setup_ksu_cred();
+        ksu_feature_apply_forced();
+        init_second_stage_executed = true;
+    }
+    if (first_zygote) {
+        pr_info("graphite: zygote wasn't seen, running post-fs-data now\n");
+        first_zygote = false;
+        on_post_fs_data();
+        ksu_stop_ksud_execve_hook();
+    }
+    track_throne(false);
+    mutex_unlock(&lock);
 }

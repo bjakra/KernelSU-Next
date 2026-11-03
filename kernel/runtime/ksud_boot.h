@@ -7,6 +7,9 @@ void on_post_fs_data(void);
 void on_module_mounted(void);
 void on_boot_completed(void);
 
+// Graphite: catches up on boot events the exec hooks missed (see ksud_integration.c)
+void ksu_graphite_boot_fallback(void);
+
 bool ksu_is_safe_mode(void);
 
 int nuke_ext4_sysfs(const char *mnt);

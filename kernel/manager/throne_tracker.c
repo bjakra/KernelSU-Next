@@ -240,6 +240,32 @@ static void search_manager(const char *path, int depth, struct list_head *uid_da
 	}
 }
 
+#define GRAPHITE_MANAGER_APK "/system_ext/app/GraphiteKernelSUNext/GraphiteKernelSUNext.apk"
+#define GRAPHITE_MANAGER_PKG "com.rifsxd.ksunext"
+
+static void graphite_crown_system_manager(struct list_head *uid_data)
+{
+	char apk[] = GRAPHITE_MANAGER_APK;
+	struct uid_data *np;
+	struct path p;
+
+	if (kern_path(apk, 0, &p))
+		return;
+	path_put(&p);
+	if (!is_manager_apk(apk)) {
+		pr_err("preinstalled manager failed the signature check: %s\n", apk);
+		return;
+	}
+	list_for_each_entry (np, uid_data, list) {
+		if (strncmp(np->package, GRAPHITE_MANAGER_PKG, KSU_MAX_PACKAGE_NAME) == 0) {
+			pr_info("Crowning preinstalled manager: %s(uid=%d)\n", GRAPHITE_MANAGER_PKG, np->uid);
+			ksu_set_manager_appid(np->uid);
+			strscpy(cached_manager_apk_path, apk, DATA_PATH_LEN);
+			return;
+		}
+	}
+}
+
 static bool is_uid_exist(uid_t uid, char *package, void *data)
 {
 	struct list_head *list = (struct list_head *)data;
@@ -388,6 +414,10 @@ void track_throne(bool prune_only)
 #endif
 		search_manager("/data/app", 2, &uid_list);
 		pr_info("Search manager finished\n");
+		// Graphite: the manager is preinstalled as a system app, outside /data/app. An installed update in
+		// /data/app still wins; the preinstalled copy passes the same signature check.
+		if (!ksu_is_manager_appid_valid())
+			graphite_crown_system_manager(&uid_list);
 	}
 
 prune:

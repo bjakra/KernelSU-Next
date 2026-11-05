@@ -483,7 +483,9 @@ int __nocfi ksu_symbol_name_of(unsigned long addr, char *buf, char **module_out)
     return (int)strlen(buf);
 }
 
-void __init ksu_init_symbol_resolver(void)
+/* Not __init: built into the kernel, susfs_init() runs from on_post_fs_data(), after the init
+ * sections are freed, so this (and everything it reaches) must stay in normal .text. */
+void ksu_init_symbol_resolver(void)
 {
     int match_ok = 0;
 

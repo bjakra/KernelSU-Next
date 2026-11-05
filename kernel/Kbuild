@@ -57,6 +57,21 @@ kernelsu-objs += feature/adb_root.o
 kernelsu-objs += feature/selinux_hide.o
 kernelsu-objs += feature/shell_su_adb_only.o
 
+# Graphite: SuSFS compiled into the kernel instead of the susfs_guard_lkm.ko module. SuSFS keeps
+# its own copies of the shared infra, so each object is force-included with susfs/susfs_builtin.h
+# to rename those symbols away from the driver's. -I.../fs reaches the private fs/mount.h; the
+# -Wno-* / dcache / selinux flags are inherited from the kernelsu-wide ccflags set below.
+ifeq ($(CONFIG_KSU_SUSFS),y)
+susfs-objs := susfs/susfs_main.o susfs/patch_memory.o susfs/symbol_resolver.o susfs/lsm_hook.o \
+	susfs/susfs_uname.o susfs/susfs_kstat.o susfs/sus_map.o susfs/sus_path.o susfs/sus_mount.o \
+	susfs/spoof_cmdline.o susfs/susfs_open_redirect.o susfs/susfs_enable_log.o \
+	susfs/susfs_avc_spoof.o susfs/susfs_supercall.o susfs/susfs_hide_syms.o susfs/imports_guard.o \
+	susfs/ksu_umount_gate.o susfs/susfs_fp_hook.o susfs/susfs_opath.o
+kernelsu-objs += $(susfs-objs)
+$(foreach o,$(susfs-objs),$(eval CFLAGS_$(o) += -I$(srctree)/fs \
+	-include $(srctree)/$(src)/susfs/susfs_builtin.h))
+endif
+
 ifdef KBUILD_EXTMOD
 ifeq ($(CONFIG_KSU_DISABLE_MANAGER),y)
 ccflags-y += -DCONFIG_KSU_DISABLE_MANAGER=1

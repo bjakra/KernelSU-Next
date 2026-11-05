@@ -309,7 +309,8 @@ static bool sc_registered;
  * abi_layout_check/ harness is not wired into any build step - hence the trip wire here.
  * Values are aarch64 LP64, the only ABI shipped clients use, and match upstream's structs
  * (kernel_patches/include/linux/susfs.h). */
-static void __init susfs_abi_layout_check(void)
+/* Not __init: reached from susfs_supercall_init() in normal .text (built-in SuSFS). */
+static void susfs_abi_layout_check(void)
 {
 	BUILD_BUG_ON(sizeof(struct st_susfs_sus_path) != 260);
 	BUILD_BUG_ON(offsetof(struct st_susfs_sus_path, err) != 256);

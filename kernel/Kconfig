@@ -35,6 +35,19 @@ config KSU_DISABLE_POLICY
 	  Escalation will always use the default full root profile, and
 	  non-root handling will follow the global umount policy only.
 
+config KSU_SUSFS
+	bool "Build KernelSU-Next SuSFS into the kernel"
+	depends on KSU
+	default y
+	help
+	  Compile KernelSU-Next's SuSFS (drivers/kernelsu/susfs) into the kernel image instead
+	  of loading it at runtime as susfs_guard_lkm.ko. Graphite builds this in because the
+	  husky kernel forces module signing and randomises struct layout, which stops any
+	  externally built module from loading. SuSFS is armed from on_post_fs_data(), the same
+	  point ksud would otherwise insmod the module. This is a root-hiding feature and
+	  weakens the device's resistance to tampering detection; it is on because KernelSU
+	  itself already is.
+
 config KSU_X86_PATCH_SYSCALL_DISPATCHER
 	bool "Dynamically patch x64's hardened syscall dispatcher to support syscall hooks"
 	depends on KSU && X86_64

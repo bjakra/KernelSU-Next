@@ -145,7 +145,9 @@ static void susfs_layers_down(int upto)
     }
 }
 
-static int __init susfs_init(void)
+/* Not __init: when SuSFS is built into the kernel (CONFIG_KSU_SUSFS) this runs from
+ * on_post_fs_data(), long after the __init sections are freed. */
+static int susfs_init(void)
 {
     int i;
 
@@ -217,6 +219,7 @@ static int __init susfs_init(void)
     return 0;
 }
 
+#ifdef MODULE
 static void __exit susfs_exit(void)
 {
     susfs_layers_down((int)ARRAY_SIZE(susfs_layers) - 1);
@@ -225,6 +228,15 @@ static void __exit susfs_exit(void)
 
 module_init(susfs_init);
 module_exit(susfs_exit);
+#endif
+
+/* Graphite: built into the kernel (CONFIG_KSU_SUSFS). KSU calls this from on_post_fs_data(),
+ * the point at which ksud would otherwise insmod the LKM - late enough that the SELinux policy
+ * is loaded, so the SID resolutions (avc_spoof) succeed. Guarded once by on_post_fs_data(). */
+int susfs_builtin_init(void)
+{
+    return susfs_init();
+}
 MODULE_LICENSE("GPL");
 
 /* The VFS symbol namespace of this kernel's GKI builds.

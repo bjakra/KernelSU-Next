@@ -17,6 +17,11 @@ bool ksu_boot_completed __read_mostly = false;
 
 extern void ksu_avc_spoof_late_init(void);
 
+#ifdef CONFIG_KSU_SUSFS
+/* Graphite: SuSFS compiled into the kernel (susfs/susfs_main.c) instead of the LKM. */
+extern int susfs_builtin_init(void);
+#endif
+
 void on_post_fs_data(void)
 {
     static bool done = false;
@@ -36,6 +41,10 @@ void on_post_fs_data(void)
     ksu_selinux_hide_handle_post_fs_data();
     // retry forced features which failed at second stage
     ksu_feature_apply_forced();
+#ifdef CONFIG_KSU_SUSFS
+    // Graphite: arm built-in SuSFS here, where ksud would have loaded the LKM.
+    susfs_builtin_init();
+#endif
 }
 
 extern void ext4_unregister_sysfs(struct super_block *sb);
